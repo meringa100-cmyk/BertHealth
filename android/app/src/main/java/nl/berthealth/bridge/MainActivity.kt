@@ -11,7 +11,6 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
-import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -28,7 +27,6 @@ class MainActivity : ComponentActivity() {
     private val permissions = setOf(
         HealthPermission.getReadPermission(HeartRateRecord::class),
         HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class)
     )
     private lateinit var client: HealthConnectClient
@@ -38,8 +36,8 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         PermissionController.createRequestPermissionResultContract()
     ) { granted ->
-        if (granted.containsAll(permissions)) readHealthData()
-        else status.text = "Niet alle leesrechten zijn verleend. Je kunt dit later opnieuw proberen."
+        if (granted.any { it in permissions }) readHealthData()
+        else status.text = "Er is nog geen leesrecht verleend. Tik opnieuw op verbinden en sta minstens één gegevenstype toe."
     }
 
     private val createFile = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -69,7 +67,7 @@ class MainActivity : ComponentActivity() {
         client = HealthConnectClient.getOrCreate(this)
         lifecycleScope.launch {
             val granted = client.permissionController.getGrantedPermissions()
-            if (granted.containsAll(permissions)) readHealthData() else permissionLauncher.launch(permissions)
+            if (granted.any { it in permissions }) readHealthData() else permissionLauncher.launch(permissions)
         }
     }
 
@@ -79,23 +77,37 @@ class MainActivity : ComponentActivity() {
                 val end = Instant.now()
                 val start = end.minus(24, ChronoUnit.HOURS)
                 val range = TimeRangeFilter.between(start, end)
-                val heart = client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = range)).records
-                    .flatMap { record -> record.samples.map { it.beatsPerMinute.toInt() } }
-                val oxygen = client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = range)).records
-                    .map { it.percentage.value.toDouble() }
-                val steps = client.aggregate(androidx.health.connect.client.request.AggregateRequest(
-                    metrics = setOf(StepsRecord.COUNT_TOTAL), timeRangeFilter = TimeRangeFilter.between(start.truncatedTo(ChronoUnit.DAYS), end)
-                ))[StepsRecord.COUNT_TOTAL] ?: 0L
+                val granted = client.permissionController.getGrantedPermissions()
+                val heartPermission = HealthPermission.getReadPermission(HeartRateRecord::class)
+                val oxygenPermission = HealthPermission.getReadPermission(OxygenSaturationRecord::class)
+                val stepsPermission = HealthPermission.getReadPermission(StepsRecord::class)
+                val heart = if (heartPermission in granted) {
+                    client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = range)).records
+                        .flatMap { record -> record.samples.map { it.beatsPerMinute.toInt() } }
+                } else emptyList()
+                val oxygen = if (oxygenPermission in granted) {
+                    client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = range)).records
+                        .map { it.percentage.value.toDouble() }
+                } else emptyList()
+                val steps = if (stepsPermission in granted) {
+                    client.aggregate(androidx.health.connect.client.request.AggregateRequest(
+                        metrics = setOf(StepsRecord.COUNT_TOTAL), timeRangeFilter = TimeRangeFilter.between(start.truncatedTo(ChronoUnit.DAYS), end)
+                    ))[StepsRecord.COUNT_TOTAL] ?: 0L
+                } else null
                 val json = JSONObject()
                 val metrics = JSONObject()
                 if (heart.isNotEmpty()) metrics.put("heartRate", heart.last())
                 if (oxygen.isNotEmpty()) metrics.put("spo2", oxygen.last())
-                metrics.put("steps", steps)
+                if (steps != null) metrics.put("steps", steps)
                 json.put("metrics", metrics)
                 json.put("updatedAt", end.toString())
                 json.put("source", "Health Connect")
                 latestJson = json.toString(2)
-                status.text = "Gegevens gelezen. Hartslagrecords: ${heart.size}; SpO₂-records: ${oxygen.size}; stappen vandaag: ${steps}. Kies export om JSON op te slaan."
+                val missing = mutableListOf<String>()
+                if (heartPermission !in granted) missing.add("hartslag")
+                if (oxygenPermission !in granted) missing.add("zuurstof")
+                if (stepsPermission !in granted) missing.add("stappen")
+                status.text = "Gegevens gelezen. Hartslagrecords: ${heart.size}; SpO₂-records: ${oxygen.size}; stappen vandaag: ${steps ?: "geen toegang"}. ${if (missing.isEmpty()) "Alle rechten actief." else "Geen toegang tot: ${missing.joinToString(", ")}."} Kies export om JSON op te slaan."
             } catch (e: Exception) {
                 status.text = "Lezen mislukt: ${e.message}"
             }
