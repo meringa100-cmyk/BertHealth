@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827"><title>Bert Health Live</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#151f31;--muted:#91a0b8;--line:#26344a;--accent:#5eead4}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 500px at 80% -10%,#19334a 0%,transparent 60%),var(--bg);color:#f4f7fb;font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1050px;margin:auto;padding:28px 18px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.eyebrow{color:var(--accent);font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700}h1{font-size:clamp(2rem,5vw,3.3rem);margin:.25rem 0}p{color:var(--muted);line-height:1.5}.status{border:1px solid #765d2c;background:#302718;color:#ffd88a;padding:8px 12px;border-radius:99px;font-size:.8rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:26px 0}.card{background:linear-gradient(145deg,#19263a,#121c2c);border:1px solid var(--line);border-radius:18px;padding:20px;min-height:145px}.label{color:var(--muted);font-size:.9rem}.value{font-size:2.25rem;font-weight:750;margin:12px 0 2px}.unit{font-size:.9rem;color:var(--muted);font-weight:500}.icon{font-size:1.3rem}.section{background:#111b2a;border:1px solid var(--line);border-radius:18px;padding:20px;margin-top:16px}.section h2{margin:0 0 8px;font-size:1.15rem}.row{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:12px 0;color:var(--muted)}button{background:var(--accent);color:#06221f;border:0;border-radius:10px;padding:11px 15px;font-weight:700;font-size:.95rem}input{display:none}.note{font-size:.85rem}.footer{margin-top:26px;color:#72829b;font-size:.8rem}
+</style>
+</head>
+<body><main>
+<div class="top"><div><div class="eyebrow">Galaxy Watch 8 · persoonlijk dashboard</div><h1>Bert Health Live</h1><p id="updated">Jouw gezondheidsgegevens op één plek.</p></div><span class="status" id="status">Nog niet gekoppeld</span></div>
+<div class="grid">
+ <article class="card"><div class="icon">♥️</div><div class="label">Hartslag</div><div class="value" id="heart">— <span class="unit">bpm</span></div><p class="note">Laatste beschikbare meting</p></article>
+ <article class="card"><div class="icon">👣</div><div class="label">Stappen vandaag</div><div class="value" id="steps">—</div><p class="note">Dagtotalen</p></article>
+ <article class="card"><div class="icon">🌙</div><div class="label">Slaap</div><div class="value" id="sleep">—</div><p class="note">Laatste slaapregistratie</p></article>
+ <article class="card"><div class="icon">🫁</div><div class="label">Zuurstof (SpO₂)</div><div class="value" id="spo2">— <span class="unit">%</span></div><p class="note">Als je horloge dit heeft geregistreerd</p></article>
+ <article class="card"><div class="icon">〰️</div><div class="label">HRV</div><div class="value" id="hrv">— <span class="unit">ms</span></div><p class="note">Hartslagvariabiliteit, indien beschikbaar</p></article>
+ <article class="card"><div class="icon">⚡</div><div class="label">Stress</div><div class="value" id="stress">—</div><p class="note">Alleen wanneer als gegeven beschikbaar</p></article>
+</div>
+<section class="section"><h2>Gegevens toevoegen</h2><p>De live Health Connect-koppeling is nog niet aangesloten. Je kunt hier alvast een Health Connect-gegevensbestand (JSON) laden zodra de Android-brug dit exporteert.</p><label for="file"><button type="button">Importeer JSON-bestand</button></label><input id="file" type="file" accept="application/json,.json"><p class="note">Gegevens blijven in deze browser op dit apparaat. Er wordt niets naar GitHub geüpload.</p></section>
+<section class="section"><h2>Verbinding en privacy</h2><div class="row"><span>Bron</span><strong>Samsung Health → Health Connect</strong></div><div class="row"><span>Synchronisatie</span><strong id="sync">Nog niet gestart</strong></div><div class="row"><span>Opslag</span><strong>Lokaal in deze browser</strong></div><p class="note">Dit dashboard toont geen medische diagnose. Horlogemetingen kunnen afwijken van medische meetapparatuur. Bij klachten: vertrouw niet op dit dashboard.</p></section>
+<div class="footer">Bert Health Live · prototype · GitHub Pages</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+function fmtDate(v){try{return new Date(v).toLocaleString('nl-NL')}catch{return String(v||'')}}
+function apply(d){
+ const m=d.metrics||d;
+ const set=(id,v,unit='')=>$(id).innerHTML=(v===undefined||v===null||v===''?'—':v)+(unit?'<span class="unit"> '+unit+'</span>':'');
+ set('heart',m.heartRate??m.heart_rate,'bpm');set('steps',m.steps);set('sleep',m.sleep??m.sleepHours??m.sleep_hours,typeof(m.sleep??m.sleepHours??m.sleep_hours)==='number'?'uur':'');set('spo2',m.spo2??m.oxygenSaturation,'%');set('hrv',m.hrv,'ms');set('stress',m.stress);
+ $('status').textContent='Gegevens geladen';$('status').style.cssText='border-color:#276b5d;background:#15352f;color:#8df0d8';
+ $('sync').textContent=fmtDate(d.updatedAt||d.timestamp||new Date());$('updated').textContent='Laatst bijgewerkt: '+fmtDate(d.updatedAt||d.timestamp||new Date());
+}
+$('file').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());apply(d);localStorage.setItem('bertHealthLatest',JSON.stringify(d))}catch{$('status').textContent='JSON-bestand niet herkend'}});
+try{const d=localStorage.getItem('bertHealthLatest');if(d)apply(JSON.parse(d))}catch{}
+</script></body></html>
