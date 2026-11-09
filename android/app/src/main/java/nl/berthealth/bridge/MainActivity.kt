@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.Duration
 import java.time.temporal.ChronoUnit
+import java.time.ZoneId
 import org.json.JSONObject
 import java.io.OutputStreamWriter
 import android.widget.LinearLayout
@@ -91,18 +92,23 @@ class MainActivity : ComponentActivity() {
                 val sleepPermission = HealthPermission.getReadPermission(SleepSessionRecord::class)
                 val hrvPermission = HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class)
 
-                val heart = if (heartPermission in granted) {
+                val heartRecords = if (heartPermission in granted) {
                     client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = range)).records
-                        .flatMap { record -> record.samples.map { it.beatsPerMinute.toInt() } }
                 } else emptyList()
-                val oxygen = if (oxygenPermission in granted) {
+                val latestHeart = heartRecords.flatMap { record ->
+                    record.samples.map { sample -> sample.time to sample.beatsPerMinute.toInt() }
+                }.maxByOrNull { it.first }?.second
+                val heartCount = heartRecords.sumOf { it.samples.size }
+                val latestOxygen = if (oxygenPermission in granted) {
                     client.readRecords(ReadRecordsRequest(OxygenSaturationRecord::class, timeRangeFilter = range)).records
-                        .map { it.percentage.value.toDouble() }
-                } else emptyList()
+                        .maxByOrNull { it.time }?.percentage?.value?.toDouble()
+                } else null
+                val localZone = ZoneId.systemDefault()
+                val localDayStart = end.atZone(localZone).toLocalDate().atStartOfDay(localZone).toInstant()
                 val steps = if (stepsPermission in granted) {
                     client.aggregate(androidx.health.connect.client.request.AggregateRequest(
                         metrics = setOf(StepsRecord.COUNT_TOTAL),
-                        timeRangeFilter = TimeRangeFilter.between(end.truncatedTo(ChronoUnit.DAYS), end)
+                        timeRangeFilter = TimeRangeFilter.between(localDayStart, end)
                     ))[StepsRecord.COUNT_TOTAL] ?: 0L
                 } else null
                 val sleepHours = if (sleepPermission in granted) {
@@ -118,8 +124,8 @@ class MainActivity : ComponentActivity() {
 
                 val json = JSONObject()
                 val metrics = JSONObject()
-                if (heart.isNotEmpty()) metrics.put("heartRate", heart.last())
-                if (oxygen.isNotEmpty()) metrics.put("spo2", oxygen.last())
+                if (latestHeart != null) metrics.put("heartRate", latestHeart)
+                if (latestOxygen != null) metrics.put("spo2", latestOxygen)
                 if (steps != null) metrics.put("steps", steps)
                 if (sleepHours != null) metrics.put("sleepHours", String.format(java.util.Locale.US, "%.1f", sleepHours).toDouble())
                 if (hrv != null) metrics.put("hrv", hrv)
@@ -134,7 +140,7 @@ class MainActivity : ComponentActivity() {
                 if (stepsPermission !in granted) missing.add("stappen")
                 if (sleepPermission !in granted) missing.add("slaap")
                 if (hrvPermission !in granted) missing.add("HRV")
-                status.text = "Bijgewerkt. Hartslagmetingen: ${heart.size}; SpO₂: ${oxygen.size}; stappen vandaag: ${steps ?: "geen toegang"}; slaap: ${sleepHours?.let { String.format(java.util.Locale.US, "%.1f uur", it) } ?: "geen meting"}; HRV: ${hrv?.let { String.format(java.util.Locale.US, "%.1f ms", it) } ?: "geen meting"}. ${if (missing.isEmpty()) "Alle rechten actief." else "Geen toegang tot: ${missing.joinToString(", ")}."} Exporteer daarna het JSON-bestand."
+                status.text = "Bijgewerkt. Hartslagmetingen: ${heartCount}; SpO₂ laatste meting: ${latestOxygen?.let { String.format(java.util.Locale.US, "%.1f%%", it) } ?: "geen meting"}; stappen vandaag: ${steps ?: "geen toegang"}; slaap: ${sleepHours?.let { String.format(java.util.Locale.US, "%.1f uur", it) } ?: "geen meting"}; HRV: ${hrv?.let { String.format(java.util.Locale.US, "%.1f ms", it) } ?: "geen meting"}. ${if (missing.isEmpty()) "Alle rechten actief." else "Geen toegang tot: ${missing.joinToString(", ")}."} Exporteer daarna het JSON-bestand."
             } catch (e: Exception) {
                 status.text = "Lezen mislukt: ${e.message}"
             }
