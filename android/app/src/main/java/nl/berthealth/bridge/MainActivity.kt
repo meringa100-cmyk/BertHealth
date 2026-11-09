@@ -11,7 +11,7 @@ import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.SleepSessionRecord
-import androidx.health.connect.client.records.HrvRmssdRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import kotlinx.coroutines.launch
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
         HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(OxygenSaturationRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
-        HealthPermission.getReadPermission(HrvRmssdRecord::class)
+        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class)
     )
     private lateinit var client: HealthConnectClient
     private lateinit var status: TextView
@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
                 val oxygenPermission = HealthPermission.getReadPermission(OxygenSaturationRecord::class)
                 val stepsPermission = HealthPermission.getReadPermission(StepsRecord::class)
                 val sleepPermission = HealthPermission.getReadPermission(SleepSessionRecord::class)
-                val hrvPermission = HealthPermission.getReadPermission(HrvRmssdRecord::class)
+                val hrvPermission = HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class)
 
                 val heart = if (heartPermission in granted) {
                     client.readRecords(ReadRecordsRequest(HeartRateRecord::class, timeRangeFilter = range)).records
@@ -112,7 +112,7 @@ class MainActivity : ComponentActivity() {
                         }
                 } else null
                 val hrv = if (hrvPermission in granted) {
-                    client.readRecords(ReadRecordsRequest(HrvRmssdRecord::class, timeRangeFilter = range)).records
+                    client.readRecords(ReadRecordsRequest(HeartRateVariabilityRmssdRecord::class, timeRangeFilter = range)).records
                         .maxByOrNull { it.time }?.rmssd
                 } else null
 
