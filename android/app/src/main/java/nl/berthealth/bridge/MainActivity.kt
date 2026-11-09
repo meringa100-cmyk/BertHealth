@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
                 } else null
                 val hrv = if (hrvPermission in granted) {
                     client.readRecords(ReadRecordsRequest(HeartRateVariabilityRmssdRecord::class, timeRangeFilter = range)).records
-                        .maxByOrNull { it.time }?.rmssd
+                        .maxByOrNull { it.time }?.heartRateVariabilityMillis
                 } else null
 
                 val json = JSONObject()
